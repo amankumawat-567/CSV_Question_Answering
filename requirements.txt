@@ -1,0 +1,7 @@
+pyyaml
+ollama
+pydantic
+pydantic-ai
+pandas
+matplotlib
+gradio
