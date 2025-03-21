@@ -1,38 +1,37 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import io
+import re  # To handle unwanted backticks
 
-def execute_filter_script(df: pd.DataFrame, script: str) -> pd.DataFrame:
+def clean_script(script: str) -> str:
+    """Removes backticks and possible 'python' markers from the script."""
+    return re.sub(r"^```(?:python)?\n?|```$", "", script.strip())
+
+def execute_filter_script(df: pd.DataFrame, script: str):
     """
-    Executes a filtering script on the provided DataFrame.
-
-    The script should be a string representing a valid Pandas operation
-    on the DataFrame `df`. It must return either:
-      - a single-column DataFrame or Series if no graph is requested, or
-      - a two-column DataFrame with column names matching the provided graph configuration.
+    Executes a filtering script on the provided DataFrame securely.
 
     Parameters:
-        df (pd.DataFrame): The original CSV DataFrame.
-        script (str): The filtering script as a string.
+        df (pd.DataFrame): The original DataFrame.
+        script (str): A string containing a valid Python expression.
 
     Returns:
-        pd.DataFrame: The filtered DataFrame or Series converted to DataFrame.
+        pd.DataFrame: The filtered DataFrame or a computed result.
 
     Raises:
-        Exception: If the script execution fails.
+        ValueError: If the script execution fails.
     """
+    script = clean_script(script)  # Clean the script
+    
+    print(script)
+
+    safe_globals = {"df": df, "pd": pd}  # Allow only Pandas and the DataFrame
     try:
-        result = eval(script, {"df": df, "pd": pd})
-        
-        if isinstance(result, pd.Series):
-            result = result.to_frame()
-        
-        if not isinstance(result, pd.DataFrame):
-            raise ValueError("The filtering script did not return a DataFrame or Series.")
+        result = eval(script, safe_globals)
 
         return result
     except Exception as e:
-        raise Exception(f"Failed to execute filter script: {e}")
+        raise ValueError(f"Script execution failed: {e}")
 
 def plot_graph(filtered_df: pd.DataFrame, graph_config: dict) -> bytes:
     """
@@ -70,25 +69,41 @@ def plot_graph(filtered_df: pd.DataFrame, graph_config: dict) -> bytes:
         graph_type = graph_config.get("type", "bar").lower()
 
         # Verify that the DataFrame contains the required columns
-        if x_label not in filtered_df.columns or y_label not in filtered_df.columns:
-            raise ValueError("Filtered DataFrame does not contain the required columns as specified in the graph configuration.")
+        x,y = list(filtered_df.columns)[:2]
+        
+        if x_label is None:
+            x_label = x
+            
+        if y_label is None:
+            y_label = y
 
         # Create a new figure for plotting
         plt.figure(figsize=(8, 6))
 
         if graph_type == "bar":
-            plt.bar(filtered_df[x_label], filtered_df[y_label])
+            plt.bar(filtered_df[x], filtered_df[y], color='blue')
             plt.xlabel(x_label)
             plt.ylabel(y_label)
             plt.title("Bar Chart")
+
         elif graph_type == "line":
-            plt.plot(filtered_df[x_label], filtered_df[y_label], marker='o')
+            plt.plot(filtered_df[x], filtered_df[y], marker='o', linestyle='-', color='green')
             plt.xlabel(x_label)
             plt.ylabel(y_label)
             plt.title("Line Chart")
-        elif graph_type == "pie":
-            plt.pie(filtered_df[y_label], labels=filtered_df[x_label], autopct='%1.1f%%')
-            plt.title("Pie Chart")
+
+        elif graph_type == "scatter":
+            plt.scatter(filtered_df[x], filtered_df[y], color='red')
+            plt.xlabel(x_label)
+            plt.ylabel(y_label)
+            plt.title("Scatter Plot")
+
+        elif graph_type == "histogram":
+            plt.hist(filtered_df[y], bins=10, color='purple', edgecolor='black')
+            plt.xlabel(y_label)
+            plt.ylabel("Frequency")
+            plt.title("Histogram")
+
         else:
             raise ValueError(f"Graph type '{graph_type}' is not supported.")
 

@@ -1,2 +1,5 @@
 .venv
 .gradio
+.backend\template\__pycache__
+.backend\__pycache__
+.frontend\__pycache__

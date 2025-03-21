@@ -1,8 +1,6 @@
 import os
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.providers.openai import OpenAIProvider
-from .template.schema import FilterResult
+from pydantic_ai.models.cohere import CohereModel
 import yaml
 
 with open("config.yml", "r") as file:
@@ -10,7 +8,9 @@ with open("config.yml", "r") as file:
 
 # Access agent configurations
 agent_model = config["Agent"]["model_name"]
-base_url = config["Agent"]["base_url"]
+api_key = config["Agent"]["api_key"]
+
+global system_prompt
 
 def load_system_prompt(file_path: str = os.path.join(os.path.dirname(__file__), "template\system_prompt.txt")) -> str:
     """
@@ -28,31 +28,28 @@ def load_system_prompt(file_path: str = os.path.join(os.path.dirname(__file__), 
 # Load system prompt from file
 system_prompt = load_system_prompt()
 
-# Initialize the Ollama model using llama3.2 (2.0GB) as specified
-ollama_model = OpenAIModel(
-    model_name=agent_model,
-    provider=OpenAIProvider(base_url=base_url)
-)
+# Model
+Cohere_model = CohereModel(agent_model,api_key=api_key)
 
 # Initialize the Agent with the model, dependency type, expected result type, and system prompt
 agent = Agent(
-    ollama_model,
+    Cohere_model,
     deps_type=list[str],
-    result_type=FilterResult,
-    system_prompt=system_prompt,
+    result_type= str,
     retries=2
 )
 
-@agent.tool
-async def get_column_names(ctx: RunContext[list[str]]) -> str:
+@agent.system_prompt
+async def get_system_prompt(ctx: RunContext[list[str]]) -> str:
     """
     Agent tool to retrieve column names from the provided list of dependencies.
-    Joins the column names into a comma-separated string.
     
     Parameters:
         ctx (RunContext[list[str]]): The context containing a list of column names.
     
     Returns:
-        str: Comma-separated column names.
+        list[str]: A list of column names.
     """
-    return ', '.join(ctx.deps)
+    prompt = system_prompt.replace("[COLUMN_NAMES]",', '.join(ctx.deps))
+    
+    return prompt
